@@ -12,12 +12,39 @@ from datetime import datetime
 import hashlib
 import requests
 
-TICKERS = ["AAPL", "MSFT", "GOOGL", "TSLA", "AMZN"]
+# ─── CONFIG ───────────────────────────────────────────────────────────────────
+
+TICKERS = [
+    # Big Tech
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "NFLX", "AMD", "INTC",
+    # Finance
+    "JPM", "BAC", "GS", "MS", "V", "MA", "PYPL", "WFC", "C",
+    # Healthcare
+    "JNJ", "PFE", "MRNA", "UNH", "ABBV", "LLY", "MRK", "ABT",
+    # Energy
+    "XOM", "CVX", "COP", "BP", "OXY",
+    # Consumer
+    "WMT", "TGT", "COST", "NKE", "MCD", "SBUX", "KO", "PEP", "PG", "DIS",
+    # Telecom & Media
+    "T", "VZ", "CMCSA", "TMUS", "SNAP", "SPOT",
+    # EVs & Automotive
+    "F", "GM", "RIVN",
+    # Cloud & SaaS
+    "CRM", "ORCL", "SNOW", "PLTR", "UBER", "ABNB", "SHOP",
+    # Semiconductors
+    "QCOM", "TXN", "MU", "AVGO", "AMAT",
+    # ETFs
+    "SPY", "QQQ", "IWM", "VTI",
+]
 CHROMA_PATH = "./chroma_db"
 COLLECTION_NAME = "stock_rag"
 
+# Must match exactly what LM Studio shows as "API Model Identifier"
 LM_STUDIO_EMBEDDING_MODEL = "text-embedding-embeddinggemma-300m"
 LM_STUDIO_URL = "http://127.0.0.1:1234"
+
+
+# ─── EMBEDDING FUNCTION ───────────────────────────────────────────────────────
 
 class LMStudioEmbedding(EmbeddingFunction):
     def __call__(self, texts):
@@ -29,6 +56,8 @@ class LMStudioEmbedding(EmbeddingFunction):
         return [item["embedding"] for item in response.json()["data"]]
 
 
+# ─── SETUP CHROMADB ───────────────────────────────────────────────────────────
+
 def get_collection():
     client = chromadb.PersistentClient(path=CHROMA_PATH)
     ef = LMStudioEmbedding()
@@ -38,6 +67,9 @@ def get_collection():
         metadata={"hnsw:space": "cosine"}
     )
     return collection
+
+
+# ─── DATA FETCHING ────────────────────────────────────────────────────────────
 
 def fetch_stock_summary(ticker: str) -> list[dict]:
     stock = yf.Ticker(ticker)
@@ -101,6 +133,8 @@ def fetch_news(ticker: str) -> list[dict]:
     return chunks
 
 
+# ─── INGESTION ────────────────────────────────────────────────────────────────
+
 def ingest(tickers: list[str] = TICKERS):
     collection = get_collection()
     all_chunks = []
@@ -121,6 +155,8 @@ def ingest(tickers: list[str] = TICKERS):
     )
     print(f"[INFO] Ingested {len(all_chunks)} chunks into ChromaDB.")
 
+
+# ─── RETRIEVAL ────────────────────────────────────────────────────────────────
 
 def retrieve(query: str, n_results: int = 5, ticker_filter: str = None) -> str:
     collection = get_collection()
@@ -146,7 +182,10 @@ def retrieve(query: str, n_results: int = 5, ticker_filter: str = None) -> str:
     return "\n\n".join(context_parts)
 
 
+# ─── QUICK TEST ───────────────────────────────────────────────────────────────
+
 if __name__ == "__main__":
+    # Verify LM Studio is reachable before doing anything
     try:
         test = requests.get(f"{LM_STUDIO_URL}/v1/models")
         test.raise_for_status()
@@ -160,7 +199,7 @@ if __name__ == "__main__":
     ingest(["AAPL", "TSLA"])
 
     print("\n=== Test retrieval ===")
-    query = "Should I buy Nvidia stocks?"
+    query = "How has Apple stock performed recently?"
     context = retrieve(query, n_results=3)
     print(f"Query: {query}\n")
     print("Retrieved context:")
